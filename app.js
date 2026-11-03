@@ -132,814 +132,717 @@ const INITIAL_CAMERA_FOV = 95;
 const AUTO_ROTATE_SPEED = 0.4;
 const COMPASS_DIRECTIONS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
-function getCategoryKey(folderName) {
-  const norm = (folderName || '').toLowerCase();
-  if (norm.includes('prithvi') || norm.includes('prathvi')) return 'prithvi';
-  if (norm.includes('akash') || norm.includes('aakash')) return 'akash';
-  if (norm.includes('vayu')) return 'vayu';
-  if (norm.includes('mph')) return 'mph';
-  if (norm.includes('virat')) return 'virat';
-  if (norm.includes('sagar setu')) return 'sagar setu';
-  if (norm.includes('installation')) return 'installation';
-  if (norm.includes('helipad')) return 'helipad';
-  if (norm.includes('view point')) return 'view point';
-  if (norm.includes('exterier') || norm.includes('exterior')) return 'exterier';
-  return null;
-}
 
-function parseFileNumber(filename) {
-  const match = String(filename || '').match(/(?:^|\/)(\d+)\.[a-z0-9]+$/i);
-  return match ? parseInt(match[1], 10) : null;
-}
+class TourCatalog {
+  constructor() {
+    const specs = [
+      ['05 Prithvi', 'PRITHVI', TourCatalog.sequence(18)],
+      ['06 Akash', 'AKASH', [
+        '1.jpg', '2.jpg', '3.jpg', '4.jpg', '5.jpg', '6.jpg', '7.jpg', '8.jpg',
+        '9.jpg', '10.jpg', '11.jpg', '12.jpg', '14.jpg', '15.jpg', '16.jpg', '17.jpg',
+        '18.jpg', '19.jpg', '20.jpg', '21.jpg', '22.jpg', '23.jpg', '24.jpg', '26.jpg'
+      ]],
+      ['04 Vayu', 'VAYU', TourCatalog.sequence(4)],
+      ['07 MPH', 'MPH', ['1.jpg', '2.jpg', '3.jpg', '4.jpg', '5.jpg', '6.jpg', '7.png']],
+      ['01 Virat', 'VIRAT', TourCatalog.sequence(15)],
+      ['08 Sagar Setu', 'SAGAR SETU', TourCatalog.sequence(5)],
+      ['02 Installation', 'INSTALLATION', TourCatalog.sequence(8)],
+      ['09 helipad', 'HELIPAD', ['1.jpg']],
+      ['10 view Point', 'VIEW POINT', ['1.jpg', '2.jpg']]
+    ];
 
-function resolveSceneTitle(folderName, filename, viewIndex = 0) {
-  const key = getCategoryKey(folderName);
-  const num = parseFileNumber(filename);
-  if (key && TITLES_BY_CATEGORY[key]) {
+    this.categories = specs.map(([folderName, displayName, filenames]) => ({
+      folderName,
+      displayName,
+      images: this.makeImageItems(folderName, filenames)
+    }));
+  }
+
+  static sequence(count, ext = 'jpg') {
+    return Array.from({ length: count }, (_, index) => `${index + 1}.${ext}`);
+  }
+
+  static categoryKey(folderName) {
+    const name = (folderName || '').toLowerCase();
+    if (name.includes('prithvi') || name.includes('prathvi')) return 'prithvi';
+    if (name.includes('akash') || name.includes('aakash')) return 'akash';
+    if (name.includes('vayu')) return 'vayu';
+    if (name.includes('mph')) return 'mph';
+    if (name.includes('virat')) return 'virat';
+    if (name.includes('sagar setu')) return 'sagar setu';
+    if (name.includes('installation')) return 'installation';
+    if (name.includes('helipad')) return 'helipad';
+    if (name.includes('view point')) return 'view point';
+    if (name.includes('exterier') || name.includes('exterior')) return 'exterier';
+    return null;
+  }
+
+  static fileNumber(filename) {
+    const match = String(filename || '').match(/(?:^|\/)(\d+)\.[a-z0-9]+$/i);
+    return match ? Number.parseInt(match[1], 10) : null;
+  }
+
+  static title(folderName, filename, viewIndex = 0) {
+    const key = TourCatalog.categoryKey(folderName);
     const table = TITLES_BY_CATEGORY[key];
-    if (num !== null && table[num]) return table[num];
-    if (table[filename]) return table[filename];
+    const number = TourCatalog.fileNumber(filename);
+    if (table) {
+      if (number !== null && table[number]) return table[number];
+      if (table[filename]) return table[filename];
+    }
+    if (key === 'helipad') return 'HELIPAD';
+    const name = (folderName || '').replace(/^\d+\s*/, '').trim().toUpperCase();
+    return `${name} - View ${viewIndex + 1}`;
   }
-  if (key === 'helipad') return 'HELIPAD';
-  const cleanCategoryName = (folderName || '').replace(/^\d+\s*/, '').trim().toUpperCase();
-  return `${cleanCategoryName} - View ${viewIndex + 1}`;
-}
 
-function resolveSceneHeading(folderName, filename, viewIndex = 0) {
-  const key = getCategoryKey(folderName);
-  const num = parseFileNumber(filename);
-  if (key && HEADINGS_BY_CATEGORY[key]) {
+  static heading(folderName, filename) {
+    const key = TourCatalog.categoryKey(folderName);
     const table = HEADINGS_BY_CATEGORY[key];
-    if (num !== null && table[num] !== undefined) return table[num];
-    if (table[filename] !== undefined) return table[filename];
+    const number = TourCatalog.fileNumber(filename);
+    if (table) {
+      if (number !== null && table[number] !== undefined) return table[number];
+      if (table[filename] !== undefined) return table[filename];
+    }
+    return DEFAULT_INITIAL_HEADING;
   }
-  return DEFAULT_INITIAL_HEADING;
-}
 
-function getSceneHeading(src) {
-  if (!src) return DEFAULT_INITIAL_HEADING;
-  const clean = decodeURIComponent(src).split('?')[0].split('#')[0].replace(/\\/g, '/');
-  const parts = clean.split('/');
-  const filename = parts.pop() || '';
-  const folderName = parts.pop() || '';
-  return resolveSceneHeading(folderName, filename);
-}
-
-function makeImageItems(folderName, filenames) {
-  return filenames.map((fn, idx) => ({
-    filename: fn,
-    src: `assets/images/${folderName}/${fn}?v=12.6`,
-    thumb: `assets/thumbnails/${folderName}/${fn}?v=12.6`,
-    title: resolveSceneTitle(folderName, fn, idx),
-    heading: resolveSceneHeading(folderName, fn, idx)
-  }));
-}
-
-function generateSequence(count, ext = 'jpg') {
-  return Array.from({ length: count }, (_, i) => `${i + 1}.${ext}`);
-}
-
-const AAKASH_FILENAMES = [
-  "1.jpg", "2.jpg", "3.jpg", "4.jpg", "5.jpg", "6.jpg", "7.jpg", "8.jpg",
-  "9.jpg", "10.jpg", "11.jpg", "12.jpg", "14.jpg", "15.jpg", "16.jpg", "17.jpg",
-  "18.jpg", "19.jpg", "20.jpg", "21.jpg", "22.jpg", "23.jpg", "24.jpg", "26.jpg"
-];
-
-const CATEGORIES_DATA = [
-  {
-    folderName: "05 Prithvi",
-    displayName: "PRITHVI",
-    images: makeImageItems("05 Prithvi", generateSequence(18))
-  },
-  {
-    folderName: "06 Akash",
-    displayName: "AKASH",
-    images: makeImageItems("06 Akash", AAKASH_FILENAMES)
-  },
-  {
-    folderName: "04 Vayu",
-    displayName: "VAYU",
-    images: makeImageItems("04 Vayu", generateSequence(4))
-  },
-  {
-    folderName: "07 MPH",
-    displayName: "MPH",
-    images: makeImageItems("07 MPH", ["1.jpg", "2.jpg", "3.jpg", "4.jpg", "5.jpg", "6.jpg", "7.png"])
-  },
-  {
-    folderName: "01 Virat",
-    displayName: "VIRAT",
-    images: makeImageItems("01 Virat", generateSequence(15))
-  },
-  {
-    folderName: "08 Sagar Setu",
-    displayName: "SAGAR SETU",
-    images: makeImageItems("08 Sagar Setu", generateSequence(5))
-  },
-  {
-    folderName: "02 Installation",
-    displayName: "INSTALLATION",
-    images: makeImageItems("02 Installation", generateSequence(8))
-  },
-  {
-    folderName: "09 helipad",
-    displayName: "HELIPAD",
-    images: makeImageItems("09 helipad", ["1.jpg"])
-  },
-  {
-    folderName: "10 view Point",
-    displayName: "VIEW POINT",
-    images: makeImageItems("10 view Point", ["1.jpg", "2.jpg"])
+  static headingFromSrc(src) {
+    if (!src) return DEFAULT_INITIAL_HEADING;
+    const clean = decodeURIComponent(src).split('?')[0].split('#')[0].replace(/\\/g, '/');
+    const parts = clean.split('/');
+    const filename = parts.pop() || '';
+    const folderName = parts.pop() || '';
+    return TourCatalog.heading(folderName, filename);
   }
-];
 
-document.addEventListener('DOMContentLoaded', () => {
-  const container = document.getElementById('panolens-container');
-  const loaderScreen = document.getElementById('loader-screen');
-  const btnStartTour = document.getElementById('btn-start-tour');
-  const sceneTopLoader = document.getElementById('scene-top-loader');
-  const activeSceneTitle = document.getElementById('active-scene-title');
-  const activeSceneTag = document.getElementById('active-scene-tag');
-  const compassAngle = document.getElementById('compass-angle');
-  const compassIcon = document.getElementById('compass-icon');
-  const compassBadge = document.getElementById('compass-badge');
+  makeImageItems(folderName, filenames) {
+    return filenames.map((filename, index) => ({
+      filename,
+      src: `assets/images/${folderName}/${filename}?v=12.6`,
+      thumb: `assets/thumbnails/${folderName}/${filename}?v=12.6`,
+      title: TourCatalog.title(folderName, filename, index),
+      heading: TourCatalog.heading(folderName, filename)
+    }));
+  }
 
-  const categoryTabsContainer = document.getElementById('category-tabs');
-  const viewsDrawer = document.getElementById('views-drawer');
-  const viewsDrawerContent = document.getElementById('views-drawer-content');
+  async scanFolder(folderName) {
+    try {
+      const response = await fetch(`assets/images/${encodeURIComponent(folderName)}/`, {
+        cache: 'no-store'
+      });
+      if (!response.ok) return null;
 
-  const btnPrev = document.getElementById('btn-prev');
-  const btnNext = document.getElementById('btn-next');
-  const btnAutoRotate = document.getElementById('btn-autorotate');
-  const btnFullscreen = document.getElementById('btn-fullscreen');
-  const btnZoomIn = document.getElementById('btn-zoomin');
-  const btnZoomOut = document.getElementById('btn-zoomout');
-  const btnReset = document.getElementById('btn-reset');
-  const btnHelp = document.getElementById('btn-help');
-  const modalHelp = document.getElementById('modal-help');
-  const modalClose = document.getElementById('modal-close');
+      const html = await response.text();
+      if (!html.includes('<a') && !html.includes('href=')) return null;
 
-  let activeCategoryIndex = 0;
-  let activeImageIndex = 0;
-  let isAutoRotating = true;
-  let isExperienceStarted = false;
-  let isDrawerHovered = false;
-  let isTabsHovered = false;
-  let closeDrawerTimer = null;
-  let autoRotateResumeTimer = null;
-  let lastRenderedCompassAngle = null;
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const files = Array.from(doc.querySelectorAll('a'), (anchor) => {
+        const title = anchor.getAttribute('title') || '';
+        const span = anchor.querySelector('.name');
+        const label = span ? span.textContent.trim() : '';
+        const text = anchor.textContent.trim();
+        const href = anchor.getAttribute('href') || '';
+        const candidate = title || label || text || href.split('/').pop();
+        return decodeURIComponent(candidate.split('?')[0].split('#')[0]);
+      }).filter((name) => /\.(jpe?g|png|webp|avif)$/i.test(name) && !name.startsWith('.'));
 
-  let accumulatedYawRotation = 0;
-  let prevYawAngle = null;
-  let isAutoSwitching = false;
-  const cameraDirection = new THREE.Vector3();
-  const panoramaCache = new Map();
-
-  const viewer = new PANOLENS.Viewer({
-    container,
-    autoRotate: true,
-    autoRotateSpeed: AUTO_ROTATE_SPEED,
-    controlBar: false,
-    cameraFov: INITIAL_CAMERA_FOV,
-    enableReticle: false,
-    dwellTime: 1200
-  });
-
-  const renderer = viewer.getRenderer();
-  if (renderer) {
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-    renderer.setPixelRatio(pixelRatio);
-    if (container) {
-      renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
+      if (!files.length) return null;
+      return [...new Set(files)].sort((a, b) => a.localeCompare(b, undefined, {
+        numeric: true,
+        sensitivity: 'base'
+      }));
+    } catch {
+      return null;
     }
   }
 
-  window.addEventListener('resize', () => {
-    if (renderer && container) {
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
+  updateImages(categoryIndex, filenames) {
+    const category = this.categories[categoryIndex];
+    if (!category || !filenames?.length) return false;
+    if (category.images.map(({ filename }) => filename).join(',') === filenames.join(',')) {
+      return false;
     }
-  });
+    category.images = this.makeImageItems(category.folderName, filenames);
+    return true;
+  }
+}
 
-  if (btnAutoRotate) {
-    btnAutoRotate.classList.add('active');
-    const icon = btnAutoRotate.querySelector('i');
-    if (icon) icon.className = 'ri-pause-line';
+/**
+ * Owns viewer, state, event handlers and timers; no dependencies on a bundler.
+ * Expects the existing DOM IDs, CSS, THREE and PANOLENS scripts on the page.
+ */
+class PanoramaTourApp {
+  constructor(catalog = new TourCatalog()) {
+    this.catalog = catalog;
+    this.categories = catalog.categories;
+    this.dom = {};
+    this.viewer = null;
+    this.renderer = null;
+    this.panoramaCache = new Map();
+    this.cameraDirection = new THREE.Vector3();
+
+    this.activeCategoryIndex = 0;
+    this.activeImageIndex = 0;
+    this.isAutoRotating = true;
+    this.isExperienceStarted = false;
+    this.isDrawerHovered = false;
+    this.isTabsHovered = false;
+    this.isAutoSwitching = false;
+    this.lastRenderedCompassAngle = null;
+    this.accumulatedYawRotation = 0;
+    this.prevYawAngle = null;
+    this.currentImageSrc = null;
+
+    this.timers = {
+      closeDrawer: null,
+      resumeRotation: null,
+      sceneLoader: null,
+      autoSwitch: null
+    };
   }
 
-  function updateCompassHUD(headingDegrees, force = false) {
-    const normAngle = Math.round(((headingDegrees % 360) + 360) % 360);
-    if (!force && normAngle === lastRenderedCompassAngle) return;
-    lastRenderedCompassAngle = normAngle;
-
-    const compassIndex = Math.round(normAngle / 45) % 8;
-    if (compassAngle) {
-      compassAngle.textContent = `${normAngle}° ${COMPASS_DIRECTIONS[compassIndex]}`;
+  init() {
+    const ids = {
+      container: 'panolens-container',
+      loaderScreen: 'loader-screen',
+      btnStartTour: 'btn-start-tour',
+      sceneTopLoader: 'scene-top-loader',
+      activeSceneTitle: 'active-scene-title',
+      activeSceneTag: 'active-scene-tag',
+      compassAngle: 'compass-angle',
+      compassIcon: 'compass-icon',
+      compassBadge: 'compass-badge',
+      categoryTabs: 'category-tabs',
+      viewsDrawer: 'views-drawer',
+      viewsDrawerContent: 'views-drawer-content',
+      btnPrev: 'btn-prev',
+      btnNext: 'btn-next',
+      btnAutoRotate: 'btn-autorotate',
+      btnFullscreen: 'btn-fullscreen',
+      btnZoomIn: 'btn-zoomin',
+      btnZoomOut: 'btn-zoomout',
+      btnReset: 'btn-reset',
+      btnHelp: 'btn-help',
+      modalHelp: 'modal-help',
+      modalClose: 'modal-close'
+    };
+    for (const [name, id] of Object.entries(ids)) {
+      this.dom[name] = document.getElementById(id);
     }
-    if (compassIcon) {
-      compassIcon.style.transform = `rotate(${-normAngle}deg)`;
+    if (!this.dom.container) {
+      console.error('Panorama viewer container #panolens-container was not found.');
+      return;
+    }
+
+    this.viewer = new PANOLENS.Viewer({
+      container: this.dom.container,
+      autoRotate: true,
+      autoRotateSpeed: AUTO_ROTATE_SPEED,
+      controlBar: false,
+      cameraFov: INITIAL_CAMERA_FOV,
+      enableReticle: false,
+      dwellTime: 1200
+    });
+    this.renderer = this.viewer.getRenderer();
+    this.resizeViewer();
+
+    this.updateAutoRotateButton();
+    this.bindEvents();
+    this.renderCategoryTabs();
+    this.renderDrawer(0, 0);
+    this.dom.viewsDrawer?.classList.add('collapsed');
+    if (this.dom.activeSceneTitle) {
+      this.dom.activeSceneTitle.textContent = 'URJA BHARAT CONVENTION CENTRE';
+    }
+
+    // Start loading the first panorama while the intro screen is still visible.
+    const firstImage = this.categories[0]?.images[0];
+    if (firstImage) {
+      const panorama = this.createPanorama(firstImage.src, firstImage.heading);
+      this.viewer.add(panorama);
+      this.viewer.setPanorama(panorama);
+      this.panoramaCache.set(firstImage.src, panorama);
+      this.resetCameraToCenter(firstImage.heading);
+      this.currentImageSrc = firstImage.src;
     }
   }
 
-  function resetCameraToCenter(headingDegrees = DEFAULT_INITIAL_HEADING) {
-    const control = viewer.getControl();
-    const camera = viewer.getCamera();
+  clearTimer(name) {
+    if (this.timers[name] !== null) {
+      clearTimeout(this.timers[name]);
+      this.timers[name] = null;
+    }
+  }
+
+  resizeViewer() {
+    if (!this.renderer || !this.dom.container) return;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setSize(
+      this.dom.container.clientWidth || window.innerWidth,
+      this.dom.container.clientHeight || window.innerHeight
+    );
+  }
+
+  updateAutoRotateButton() {
+    const button = this.dom.btnAutoRotate;
+    if (!button) return;
+    button.classList.toggle('active', this.isAutoRotating);
+    const icon = button.querySelector('i');
+    if (icon) icon.className = this.isAutoRotating ? 'ri-pause-line' : 'ri-play-line';
+  }
+
+  updateCompassHUD(headingDegrees, force = false) {
+    const angle = Math.round(((headingDegrees % 360) + 360) % 360);
+    if (!force && angle === this.lastRenderedCompassAngle) return;
+    this.lastRenderedCompassAngle = angle;
+    const direction = COMPASS_DIRECTIONS[Math.round(angle / 45) % 8];
+    if (this.dom.compassAngle) this.dom.compassAngle.textContent = `${angle}° ${direction}`;
+    if (this.dom.compassIcon) this.dom.compassIcon.style.transform = `rotate(${-angle}deg)`;
+  }
+
+  resetCameraToCenter(headingDegrees = DEFAULT_INITIAL_HEADING) {
+    const control = this.viewer.getControl();
+    const camera = this.viewer.getCamera();
     if (!control || !camera) return;
 
-    if (viewer.tweenLeftAnimation && typeof viewer.tweenLeftAnimation.stop === 'function') {
-      viewer.tweenLeftAnimation.stop();
-    }
-    if (viewer.tweenUpAnimation && typeof viewer.tweenUpAnimation.stop === 'function') {
-      viewer.tweenUpAnimation.stop();
-    }
+    this.viewer.tweenLeftAnimation?.stop?.();
+    this.viewer.tweenUpAnimation?.stop?.();
+    this.clearTimer('resumeRotation');
 
-    if (autoRotateResumeTimer) {
-      clearTimeout(autoRotateResumeTimer);
-      autoRotateResumeTimer = null;
-    }
-
-    const wasAutoRotating = isAutoRotating;
+    const resumeAutoRotation = this.isAutoRotating;
     control.autoRotate = false;
-
-    const rad = (headingDegrees * Math.PI) / 180;
-    const radius = 1;
-
-    camera.position.set(-radius * Math.sin(rad), 0, radius * Math.cos(rad));
+    const radians = (headingDegrees * Math.PI) / 180;
+    camera.position.set(-Math.sin(radians), 0, Math.cos(radians));
     camera.lookAt(0, 0, 0);
     camera.fov = INITIAL_CAMERA_FOV;
     camera.updateProjectionMatrix();
 
     control.maxFov = 110;
-    if (control.position0) {
-      control.position0.copy(camera.position);
-    }
-    if (control.target0) {
-      control.target0.set(0, 0, 0);
-    }
-    if (typeof control.reset === 'function') {
-      control.reset();
-    }
+    if (control.position0) control.position0.copy(camera.position);
+    if (control.target0) control.target0.set(0, 0, 0);
+    if (typeof control.reset === 'function') control.reset();
     control.target.set(0, 0, 0);
     camera.fov = INITIAL_CAMERA_FOV;
     camera.updateProjectionMatrix();
 
-    accumulatedYawRotation = 0;
-    prevYawAngle = null;
+    this.accumulatedYawRotation = 0;
+    this.prevYawAngle = null;
+    this.updateCompassHUD(headingDegrees, true);
 
-    updateCompassHUD(headingDegrees, true);
-
-    if (wasAutoRotating) {
-      autoRotateResumeTimer = setTimeout(() => {
-        if (isAutoRotating && control) {
+    if (resumeAutoRotation) {
+      this.timers.resumeRotation = setTimeout(() => {
+        if (this.isAutoRotating) {
           control.autoRotate = true;
           control.autoRotateSpeed = AUTO_ROTATE_SPEED;
         }
+        this.timers.resumeRotation = null;
       }, 600);
     }
   }
 
-  function enhancePanoramaResolution(pano) {
-    pano.addEventListener('load', () => {
+  enhancePanoramaResolution(panorama) {
+    panorama.addEventListener('load', () => {
       try {
-        const rnd = viewer.getRenderer();
-        const maxAniso = rnd && rnd.capabilities ? rnd.capabilities.getMaxAnisotropy() : 16;
-        function applySharpness(obj) {
-          if (!obj) return;
-          if (obj.material && obj.material.map) {
-            obj.material.map.anisotropy = maxAniso;
-            obj.material.map.generateMipmaps = true;
-            obj.material.map.minFilter = THREE.LinearMipMapLinearFilter;
-            obj.material.map.magFilter = THREE.LinearFilter;
-            obj.material.map.needsUpdate = true;
-          }
-        }
-        if (pano.children && pano.children.length > 0) {
-          pano.children.forEach(applySharpness);
-        }
-        if (pano.mesh) applySharpness(pano.mesh);
-        applySharpness(pano);
-      } catch (err) {
-        console.warn('High-res texture settings notice:', err);
+        const renderer = this.viewer.getRenderer();
+        const anisotropy = renderer?.capabilities?.getMaxAnisotropy() ?? 16;
+        const sharpen = (object) => {
+          const map = object?.material?.map;
+          if (!map) return;
+          map.anisotropy = anisotropy;
+          map.generateMipmaps = true;
+          map.minFilter = THREE.LinearMipMapLinearFilter;
+          map.magFilter = THREE.LinearFilter;
+          map.needsUpdate = true;
+        };
+        panorama.children?.forEach(sharpen);
+        sharpen(panorama.mesh);
+        sharpen(panorama);
+      } catch (error) {
+        console.warn('High-res texture settings notice:', error);
       }
     });
   }
 
-  function createPanorama(src, heading = getSceneHeading(src)) {
-    const pano = new PANOLENS.ImagePanorama(src);
-    pano.addEventListener('enter-fade-start', () => {
-      resetCameraToCenter(heading);
+  createPanorama(src, heading = TourCatalog.headingFromSrc(src)) {
+    const panorama = new PANOLENS.ImagePanorama(src);
+    panorama.addEventListener('enter-fade-start', () => {
+      // A preloaded panorama still needs its own heading when entered.
+      if (this.currentImageSrc === src) this.resetCameraToCenter(heading);
     });
-    enhancePanoramaResolution(pano);
-    return pano;
+    this.enhancePanoramaResolution(panorama);
+    return panorama;
   }
 
-  const firstCat = CATEGORIES_DATA[0];
-  if (firstCat && firstCat.images[0]) {
-    const firstPano = createPanorama(firstCat.images[0].src, firstCat.images[0].heading);
-    viewer.add(firstPano);
-    viewer.setPanorama(firstPano);
-    panoramaCache.set(firstCat.images[0].src, firstPano);
-    resetCameraToCenter(firstCat.images[0].heading);
-  }
-
-  function startExperience(catIndex = 0, imgIndex = 0) {
-    isExperienceStarted = true;
-    isAutoRotating = true;
-    const control = viewer.getControl();
+  startExperience(categoryIndex = 0, imageIndex = 0) {
+    this.isExperienceStarted = true;
+    this.isAutoRotating = true;
+    const control = this.viewer.getControl();
     if (control) {
       control.autoRotate = true;
       control.autoRotateSpeed = AUTO_ROTATE_SPEED;
     }
-    if (btnAutoRotate) {
-      btnAutoRotate.classList.add('active');
-      const icon = btnAutoRotate.querySelector('i');
-      if (icon) icon.className = 'ri-pause-line';
-    }
-    if (loaderScreen && !loaderScreen.classList.contains('hidden')) {
-      loaderScreen.classList.add('hidden');
-    }
-    switchPanorama(catIndex, imgIndex);
+    this.updateAutoRotateButton();
+    this.dom.loaderScreen?.classList.add('hidden');
+    this.switchPanorama(categoryIndex, imageIndex);
   }
 
-  if (btnStartTour) {
-    btnStartTour.addEventListener('click', (e) => {
-      e.stopPropagation();
-      startExperience(0, 0);
-    });
-  }
-
-  async function fetchFolderImageList(folderName) {
+  async scanCategory(categoryIndex, forceUpdate = false) {
+    const category = this.categories[categoryIndex];
+    if (!category) return;
     try {
-      const url = `assets/images/${encodeURIComponent(folderName)}/`;
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) return null;
-      const html = await res.text();
-      if (!html.includes('<a') && !html.includes('href=')) return null;
-
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const links = Array.from(doc.querySelectorAll('a'));
-      const imageFiles = [];
-      const validExtensions = /\.(jpe?g|png|webp|avif)$/i;
-
-      links.forEach(a => {
-        const title = a.getAttribute('title') || '';
-        const nameSpan = a.querySelector('.name');
-        const spanText = nameSpan ? nameSpan.textContent.trim() : '';
-        const text = a.textContent.trim();
-        const href = a.getAttribute('href') || '';
-
-        let candidate = title || spanText || text || href.split('/').pop();
-        candidate = decodeURIComponent(candidate.split('?')[0].split('#')[0]);
-
-        if (validExtensions.test(candidate) && !candidate.startsWith('.')) {
-          imageFiles.push(candidate);
-        }
-      });
-
-      if (imageFiles.length > 0) {
-        const unique = Array.from(new Set(imageFiles));
-        unique.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-        return unique;
+      const filenames = await this.catalog.scanFolder(category.folderName);
+      if (!filenames?.length) return;
+      const changed = this.catalog.updateImages(categoryIndex, filenames);
+      if ((changed || forceUpdate) && this.activeCategoryIndex === categoryIndex &&
+        this.dom.viewsDrawer && !this.dom.viewsDrawer.classList.contains('collapsed')) {
+        this.renderDrawer(categoryIndex, this.activeImageIndex);
       }
-    } catch {
-      return null;
+    } catch (error) {
+      console.warn(`Scan error for ${category.displayName}:`, error);
     }
-    return null;
   }
 
-  function updateCategoryImages(catIndex, fileList) {
-    const cat = CATEGORIES_DATA[catIndex];
-    if (!cat || !fileList || fileList.length === 0) return false;
-
-    const currentFiles = cat.images.map(img => img.filename).join(',');
-    const newFiles = fileList.join(',');
-
-    if (currentFiles === newFiles) return false;
-
-    cat.images = makeImageItems(cat.folderName, fileList);
-    return true;
+  openDrawerForCategory(categoryIndex) {
+    this.clearTimer('closeDrawer');
+    this.activeCategoryIndex = categoryIndex;
+    this.updateActiveTabs(categoryIndex);
+    this.renderDrawer(categoryIndex, this.activeImageIndex);
+    this.dom.viewsDrawer?.classList.remove('collapsed');
+    void this.scanCategory(categoryIndex);
   }
 
-  async function scanCategory(catIndex, forceUpdate = false) {
-    const cat = CATEGORIES_DATA[catIndex];
-    if (!cat) return;
-
-    try {
-      const files = await fetchFolderImageList(cat.folderName);
-      if (files && files.length > 0) {
-        const changed = updateCategoryImages(catIndex, files);
-        if ((changed || forceUpdate) && activeCategoryIndex === catIndex && viewsDrawer && !viewsDrawer.classList.contains('collapsed')) {
-          renderDrawer(catIndex, activeImageIndex);
-        }
+  scheduleCloseDrawer() {
+    this.clearTimer('closeDrawer');
+    this.timers.closeDrawer = setTimeout(() => {
+      if (!this.isDrawerHovered && !this.isTabsHovered) {
+        this.dom.viewsDrawer?.classList.add('collapsed');
       }
-    } catch (err) {
-      console.warn(`Scan error for ${cat.displayName}:`, err);
-    }
-  }
-
-  function openDrawerForCategory(catIndex) {
-    if (closeDrawerTimer) {
-      clearTimeout(closeDrawerTimer);
-      closeDrawerTimer = null;
-    }
-
-    activeCategoryIndex = catIndex;
-
-    if (categoryTabsContainer) {
-      const tabButtons = categoryTabsContainer.querySelectorAll('.category-tab-btn');
-      tabButtons.forEach((btn, idx) => {
-        btn.classList.toggle('active', idx === catIndex);
-      });
-    }
-
-    renderDrawer(catIndex, activeImageIndex);
-
-    if (viewsDrawer) {
-      viewsDrawer.classList.remove('collapsed');
-    }
-
-    scanCategory(catIndex);
-  }
-
-  function scheduleCloseDrawer() {
-    if (closeDrawerTimer) clearTimeout(closeDrawerTimer);
-    closeDrawerTimer = setTimeout(() => {
-      if (!isDrawerHovered && !isTabsHovered && viewsDrawer) {
-        viewsDrawer.classList.add('collapsed');
-      }
+      this.timers.closeDrawer = null;
     }, 280);
   }
 
-  function renderCategoryTabs() {
-    if (!categoryTabsContainer) return;
-    categoryTabsContainer.innerHTML = '';
-
-    CATEGORIES_DATA.forEach((cat, index) => {
-      const tabBtn = document.createElement('button');
-      tabBtn.className = `category-tab-btn ${index === activeCategoryIndex ? 'active' : ''}`;
-      tabBtn.setAttribute('data-category-index', index);
-      tabBtn.innerHTML = `<span class="tab-name">${cat.displayName}</span>`;
-
-      tabBtn.addEventListener('mouseenter', () => {
-        isTabsHovered = true;
-        const allTabs = categoryTabsContainer.querySelectorAll('.category-tab-btn');
-        allTabs.forEach((btn, i) => btn.classList.toggle('active', i === index));
-        openDrawerForCategory(index);
-      });
-
-      tabBtn.addEventListener('mouseleave', () => {
-        isTabsHovered = false;
-        scheduleCloseDrawer();
-      });
-
-      tabBtn.addEventListener('click', () => {
-        openDrawerForCategory(index);
-        if (!isExperienceStarted) {
-          startExperience(index, 0);
-        } else {
-          switchPanorama(index, 0);
-        }
-      });
-
-      categoryTabsContainer.appendChild(tabBtn);
+  updateActiveTabs(categoryIndex) {
+    this.dom.categoryTabs?.querySelectorAll('.category-tab-btn').forEach((button, index) => {
+      button.classList.toggle('active', index === categoryIndex);
     });
   }
 
-  if (viewsDrawer) {
-    viewsDrawer.addEventListener('mouseenter', () => {
-      isDrawerHovered = true;
-      if (closeDrawerTimer) {
-        clearTimeout(closeDrawerTimer);
-        closeDrawerTimer = null;
-      }
-      viewsDrawer.classList.remove('collapsed');
-    });
+  renderCategoryTabs() {
+    const container = this.dom.categoryTabs;
+    if (!container) return;
+    container.replaceChildren();
 
-    viewsDrawer.addEventListener('mouseleave', () => {
-      isDrawerHovered = false;
-      scheduleCloseDrawer();
+    this.categories.forEach((category, index) => {
+      const button = document.createElement('button');
+      button.className = `category-tab-btn ${index === this.activeCategoryIndex ? 'active' : ''}`;
+      button.dataset.categoryIndex = String(index);
+      const title = document.createElement('span');
+      title.className = 'tab-name';
+      title.textContent = category.displayName;
+      button.appendChild(title);
+
+      button.addEventListener('mouseenter', () => {
+        this.isTabsHovered = true;
+        this.openDrawerForCategory(index);
+      });
+      button.addEventListener('mouseleave', () => {
+        this.isTabsHovered = false;
+        this.scheduleCloseDrawer();
+      });
+      button.addEventListener('click', () => {
+        this.openDrawerForCategory(index);
+        if (this.isExperienceStarted) this.switchPanorama(index, 0);
+        else this.startExperience(index, 0);
+      });
+      container.appendChild(button);
     });
   }
 
-  function preloadNextPanorama(catIndex, currentImgIdx) {
-    const cat = CATEGORIES_DATA[catIndex];
-    if (!cat || cat.images.length <= 1) return;
-    const nextIdx = (currentImgIdx + 1) % cat.images.length;
-    const nextItem = cat.images[nextIdx];
-    if (!panoramaCache.has(nextItem.src)) {
-      const nextPano = createPanorama(nextItem.src, nextItem.heading);
-      viewer.add(nextPano);
-      panoramaCache.set(nextItem.src, nextPano);
-    }
-  }
+  renderDrawer(categoryIndex, currentImageIndex = 0) {
+    const container = this.dom.viewsDrawerContent;
+    const category = this.categories[categoryIndex];
+    if (!container || !category) return;
+    container.replaceChildren();
 
-  function renderDrawer(catIndex, currentImgIdx = 0) {
-    if (!viewsDrawerContent) return;
-    const cat = CATEGORIES_DATA[catIndex];
-    if (!cat) return;
-
-    viewsDrawerContent.innerHTML = '';
-
-    if (cat.images.length === 0) {
-      viewsDrawerContent.innerHTML = `
-        <div style="padding: 24px 16px; text-align: center; color: rgba(255,255,255,0.6); font-size: 13px;">
-          No images found in <code>assets/images/${cat.folderName}/</code>
-        </div>
-      `;
+    if (!category.images.length) {
+      const message = document.createElement('div');
+      message.style.cssText = 'padding:24px 16px;text-align:center;color:rgba(255,255,255,.6);font-size:13px';
+      message.append('No images found in ');
+      const code = document.createElement('code');
+      code.textContent = `assets/images/${category.folderName}/`;
+      message.appendChild(code);
+      container.appendChild(message);
       return;
     }
 
-    cat.images.forEach((imgItem, idx) => {
-      const isCardActive = (catIndex === activeCategoryIndex && idx === activeImageIndex);
+    const fragment = document.createDocumentFragment();
+    category.images.forEach((image, index) => {
       const row = document.createElement('div');
-      row.className = `drawer-item ${isCardActive ? 'active' : ''}`;
-      row.setAttribute('data-img-index', idx);
+      const active = categoryIndex === this.activeCategoryIndex && index === this.activeImageIndex;
+      row.className = `drawer-item ${active ? 'active' : ''}`;
+      row.dataset.imgIndex = String(index);
 
-      const itemTitle = imgItem.title || `${cat.displayName} - View ${idx + 1}`;
+      const thumbnailWrap = document.createElement('div');
+      thumbnailWrap.className = 'drawer-thumb-wrap';
+      const thumbnail = document.createElement('img');
+      thumbnail.src = image.thumb;
+      thumbnail.alt = image.title || `${category.displayName} - View ${index + 1}`;
+      thumbnail.loading = 'lazy';
+      thumbnail.className = 'drawer-thumb';
+      thumbnail.addEventListener('error', () => {
+        // Use the full-size image if the thumbnail does not exist (once only).
+        thumbnail.src = image.src;
+      }, { once: true });
+      thumbnailWrap.appendChild(thumbnail);
 
-      row.innerHTML = `
-        <div class="drawer-thumb-wrap">
-          <img 
-            src="${imgItem.thumb}" 
-            onerror="this.onerror=null;this.src='${imgItem.src}'" 
-            alt="${itemTitle}" 
-            loading="lazy" 
-            class="drawer-thumb"
-          />
-        </div>
-        <span class="drawer-item-title">${itemTitle}</span>
-      `;
-
-      row.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!isExperienceStarted) {
-          startExperience(catIndex, idx);
-        } else {
-          switchPanorama(catIndex, idx);
-        }
+      const title = document.createElement('span');
+      title.className = 'drawer-item-title';
+      title.textContent = thumbnail.alt;
+      row.append(thumbnailWrap, title);
+      row.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (this.isExperienceStarted) this.switchPanorama(categoryIndex, index);
+        else this.startExperience(categoryIndex, index);
       });
-
-      viewsDrawerContent.appendChild(row);
+      fragment.appendChild(row);
     });
-
-    const activeItem = viewsDrawerContent.children[currentImgIdx];
-    if (activeItem) {
-      activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    container.appendChild(fragment);
+    container.children[currentImageIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  function switchPanorama(catIndex, imgIndex) {
-    activeCategoryIndex = catIndex;
-    activeImageIndex = imgIndex;
+  preloadNextPanorama(categoryIndex, currentImageIndex) {
+    const category = this.categories[categoryIndex];
+    if (!category || category.images.length <= 1) return;
+    const nextImage = category.images[(currentImageIndex + 1) % category.images.length];
+    if (this.panoramaCache.has(nextImage.src)) return;
+    const panorama = this.createPanorama(nextImage.src, nextImage.heading);
+    this.viewer.add(panorama);
+    this.panoramaCache.set(nextImage.src, panorama);
+  }
 
-    const cat = CATEGORIES_DATA[catIndex];
-    if (!cat || !cat.images[imgIndex]) return;
-    const imgItem = cat.images[imgIndex];
-    const heading = imgItem.heading ?? getSceneHeading(imgItem.src);
-
-    resetCameraToCenter(heading);
-
-    if (categoryTabsContainer) {
-      const allTabs = categoryTabsContainer.querySelectorAll('.category-tab-btn');
-      allTabs.forEach((btn, i) => btn.classList.toggle('active', i === catIndex));
+  updateSceneLabels(image, imageIndex, total) {
+    if (this.dom.activeSceneTitle) this.dom.activeSceneTitle.textContent = image.title;
+    if (this.dom.activeSceneTag) {
+      this.dom.activeSceneTag.textContent = `View ${imageIndex + 1} of ${total}`;
     }
+    this.updateActiveTabs(this.activeCategoryIndex);
+    this.dom.viewsDrawerContent?.querySelectorAll('.drawer-item').forEach((row, index) => {
+      const active = index === imageIndex;
+      row.classList.toggle('active', active);
+      if (active) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
 
-    if (activeSceneTitle) activeSceneTitle.textContent = imgItem.title;
-    if (activeSceneTag) activeSceneTag.textContent = `View ${imgIndex + 1} of ${cat.images.length}`;
+  showSceneLoader() {
+    if (!this.isExperienceStarted || !this.dom.sceneTopLoader) return;
+    this.clearTimer('sceneLoader');
+    this.dom.sceneTopLoader.classList.remove('hidden');
+    this.dom.sceneTopLoader.style.width = '40%';
+  }
 
-    if (viewsDrawerContent) {
-      const rows = viewsDrawerContent.querySelectorAll('.drawer-item');
-      rows.forEach((row, idx) => {
-        const isActive = idx === imgIndex;
-        row.classList.toggle('active', isActive);
-        if (isActive) {
-          row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  hideSceneLoader(delay) {
+    if (!this.isExperienceStarted || !this.dom.sceneTopLoader) return;
+    this.clearTimer('sceneLoader');
+    this.dom.sceneTopLoader.style.width = '100%';
+    this.timers.sceneLoader = setTimeout(() => {
+      this.dom.sceneTopLoader.classList.add('hidden');
+      this.dom.sceneTopLoader.style.width = '0%';
+      this.timers.sceneLoader = null;
+    }, delay);
+  }
+
+  switchPanorama(categoryIndex, imageIndex) {
+    const category = this.categories[categoryIndex];
+    const image = category?.images[imageIndex];
+    if (!image) return;
+
+    this.activeCategoryIndex = categoryIndex;
+    this.activeImageIndex = imageIndex;
+    this.currentImageSrc = image.src;
+    const heading = image.heading ?? TourCatalog.headingFromSrc(image.src);
+
+    this.resetCameraToCenter(heading);
+    this.updateSceneLabels(image, imageIndex, category.images.length);
+    this.showSceneLoader();
+
+    let panorama = this.panoramaCache.get(image.src);
+    if (!panorama) {
+      panorama = this.createPanorama(image.src, heading);
+      panorama.addEventListener('progress', (event) => {
+        if (this.currentImageSrc !== image.src || !this.isExperienceStarted || !this.dom.sceneTopLoader) return;
+        if (event.progress?.total) {
+          const percent = Math.round((event.progress.loaded / event.progress.total) * 100) || 40;
+          this.dom.sceneTopLoader.style.width = `${percent}%`;
         }
       });
-    }
-
-    if (isExperienceStarted && sceneTopLoader) {
-      sceneTopLoader.classList.remove('hidden');
-      sceneTopLoader.style.width = '40%';
-    }
-
-    let pano = panoramaCache.get(imgItem.src);
-    if (!pano) {
-      pano = createPanorama(imgItem.src, heading);
-
-      pano.addEventListener('progress', (e) => {
-        if (e.progress && e.progress.total && isExperienceStarted && sceneTopLoader) {
-          const pct = Math.round((e.progress.loaded / e.progress.total) * 100) || 40;
-          sceneTopLoader.style.width = `${pct}%`;
+      panorama.addEventListener('load', () => {
+        if (this.currentImageSrc !== image.src) return;
+        this.hideSceneLoader(250);
+        this.resetCameraToCenter(heading);
+        this.preloadNextPanorama(categoryIndex, imageIndex);
+      });
+      panorama.addEventListener('error', () => {
+        console.error('Failed to load panorama:', image.src);
+        if (this.currentImageSrc === image.src) {
+          this.clearTimer('sceneLoader');
+          this.dom.sceneTopLoader?.classList.add('hidden');
         }
       });
-
-      pano.addEventListener('load', () => {
-        if (isExperienceStarted && sceneTopLoader) {
-          sceneTopLoader.style.width = '100%';
-          setTimeout(() => {
-            sceneTopLoader.classList.add('hidden');
-            sceneTopLoader.style.width = '0%';
-          }, 250);
-        }
-        resetCameraToCenter(heading);
-        preloadNextPanorama(catIndex, imgIndex);
-      });
-
-      pano.addEventListener('error', () => {
-        console.error('Failed to load panorama:', imgItem.src);
-        if (sceneTopLoader) sceneTopLoader.classList.add('hidden');
-      });
-
-      viewer.add(pano);
-      panoramaCache.set(imgItem.src, pano);
+      this.viewer.add(panorama);
+      this.panoramaCache.set(image.src, panorama);
     } else {
-      if (isExperienceStarted && sceneTopLoader) {
-        sceneTopLoader.style.width = '100%';
-        setTimeout(() => {
-          sceneTopLoader.classList.add('hidden');
-          sceneTopLoader.style.width = '0%';
-        }, 150);
-      }
-      resetCameraToCenter(heading);
-      preloadNextPanorama(catIndex, imgIndex);
+      this.hideSceneLoader(150);
+      this.resetCameraToCenter(heading);
+      this.preloadNextPanorama(categoryIndex, imageIndex);
     }
-
-    viewer.setPanorama(pano);
+    this.viewer.setPanorama(panorama);
   }
 
-  function navigateScene(direction) {
-    const cat = CATEGORIES_DATA[activeCategoryIndex];
-    if (!cat || !cat.images || cat.images.length === 0) return;
-    const targetIdx = (activeImageIndex + direction + cat.images.length) % cat.images.length;
-    if (!isExperienceStarted) {
-      startExperience(activeCategoryIndex, targetIdx);
-    } else {
-      switchPanorama(activeCategoryIndex, targetIdx);
-    }
+  navigateScene(direction) {
+    const category = this.categories[this.activeCategoryIndex];
+    if (!category?.images.length) return;
+    const index = (this.activeImageIndex + direction + category.images.length) % category.images.length;
+    if (this.isExperienceStarted) this.switchPanorama(this.activeCategoryIndex, index);
+    else this.startExperience(this.activeCategoryIndex, index);
   }
 
-  function adjustZoom(delta) {
-    if (!isExperienceStarted) startExperience();
-    const camera = viewer.getCamera();
-    if (camera) {
-      camera.fov = Math.min(100, Math.max(30, camera.fov + delta));
-      camera.updateProjectionMatrix();
-    }
-  }
-
-  function resetToActiveHeading() {
-    if (!isExperienceStarted) startExperience();
-    const cat = CATEGORIES_DATA[activeCategoryIndex];
-    const imgItem = cat && cat.images[activeImageIndex];
-    const heading = imgItem ? (imgItem.heading ?? getSceneHeading(imgItem.src)) : DEFAULT_INITIAL_HEADING;
-    resetCameraToCenter(heading);
-  }
-
-  if (btnPrev) {
-    btnPrev.addEventListener('click', () => navigateScene(-1));
-  }
-
-  if (btnNext) {
-    btnNext.addEventListener('click', () => navigateScene(1));
-  }
-
-  if (btnAutoRotate) {
-    btnAutoRotate.addEventListener('click', () => {
-      if (!isExperienceStarted) startExperience();
-      isAutoRotating = !isAutoRotating;
-      const control = viewer.getControl();
-      if (control) {
-        control.autoRotate = isAutoRotating;
-        control.autoRotateSpeed = AUTO_ROTATE_SPEED;
-      }
-      btnAutoRotate.classList.toggle('active', isAutoRotating);
-      const icon = btnAutoRotate.querySelector('i');
-      if (icon) icon.className = isAutoRotating ? 'ri-pause-line' : 'ri-play-line';
-      accumulatedYawRotation = 0;
-    });
-  }
-
-  if (btnFullscreen) {
-    btnFullscreen.addEventListener('click', () => {
-      if (!isExperienceStarted) startExperience();
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
-    });
-
-    document.addEventListener('fullscreenchange', () => {
-      const isFS = !!document.fullscreenElement;
-      btnFullscreen.classList.toggle('active', isFS);
-      const icon = btnFullscreen.querySelector('i');
-      if (icon) icon.className = isFS ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line';
-    });
-  }
-
-  if (btnZoomIn) {
-    btnZoomIn.addEventListener('click', () => adjustZoom(-10));
-  }
-
-  if (btnZoomOut) {
-    btnZoomOut.addEventListener('click', () => adjustZoom(10));
-  }
-
-  if (btnReset) {
-    btnReset.addEventListener('click', resetToActiveHeading);
-  }
-
-  if (compassBadge) {
-    compassBadge.addEventListener('click', resetToActiveHeading);
-  }
-
-  if (btnHelp) {
-    btnHelp.addEventListener('click', () => {
-      if (modalHelp) modalHelp.classList.add('active');
-    });
-  }
-
-  if (modalClose) {
-    modalClose.addEventListener('click', () => {
-      if (modalHelp) modalHelp.classList.remove('active');
-    });
-  }
-
-  if (modalHelp) {
-    modalHelp.addEventListener('click', (e) => {
-      if (e.target === modalHelp) modalHelp.classList.remove('active');
-    });
-  }
-
-  viewer.addUpdateCallback(() => {
-    const camera = viewer.getCamera();
+  adjustZoom(delta) {
+    if (!this.isExperienceStarted) this.startExperience();
+    const camera = this.viewer.getCamera();
     if (!camera) return;
-
-    camera.getWorldDirection(cameraDirection);
-    let angle = Math.atan2(cameraDirection.x, -cameraDirection.z) * (180 / Math.PI);
-    angle = Math.round((angle + 360) % 360);
-
-    updateCompassHUD(angle);
-
-    if (!isExperienceStarted) return;
-
-    if (prevYawAngle !== null && !isAutoSwitching) {
-      let deltaAngle = angle - prevYawAngle;
-      if (deltaAngle > 180) deltaAngle -= 360;
-      if (deltaAngle < -180) deltaAngle += 360;
-
-      if (isAutoRotating) {
-        accumulatedYawRotation += Math.abs(deltaAngle);
-
-        if (accumulatedYawRotation >= 355) {
-          accumulatedYawRotation = 0;
-          isAutoSwitching = true;
-
-          const cat = CATEGORIES_DATA[activeCategoryIndex];
-          let nextCatIdx = activeCategoryIndex;
-          let nextImgIdx = activeImageIndex + 1;
-
-          if (cat && nextImgIdx >= cat.images.length) {
-            nextCatIdx = (activeCategoryIndex + 1) % CATEGORIES_DATA.length;
-            nextImgIdx = 0;
-          }
-
-          switchPanorama(nextCatIdx, nextImgIdx);
-
-          setTimeout(() => {
-            isAutoSwitching = false;
-            accumulatedYawRotation = 0;
-          }, 2000);
-        }
-      }
-    }
-    prevYawAngle = angle;
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'f' || e.key === 'F') {
-      if (btnFullscreen) btnFullscreen.click();
-    } else if (e.key === 'r' || e.key === 'R') {
-      if (btnReset) btnReset.click();
-    } else if (e.key === ' ') {
-      e.preventDefault();
-      if (btnAutoRotate) btnAutoRotate.click();
-    } else if (e.key === 'Escape') {
-      if (modalHelp && modalHelp.classList.contains('active')) {
-        modalHelp.classList.remove('active');
-      } else if (viewsDrawer) {
-        viewsDrawer.classList.add('collapsed');
-      }
-    }
-  });
-
-  renderCategoryTabs();
-  renderDrawer(0, 0);
-  if (activeSceneTitle) activeSceneTitle.textContent = 'URJA BHARAT CONVENTION CENTRE';
-
-  if (viewsDrawer) {
-    viewsDrawer.classList.add('collapsed');
+    camera.fov = Math.min(100, Math.max(30, camera.fov + delta));
+    camera.updateProjectionMatrix();
   }
+
+  resetToActiveHeading() {
+    if (!this.isExperienceStarted) this.startExperience();
+    const image = this.categories[this.activeCategoryIndex]?.images[this.activeImageIndex];
+    this.resetCameraToCenter(image?.heading ?? DEFAULT_INITIAL_HEADING);
+  }
+
+  toggleAutoRotate() {
+    if (!this.isExperienceStarted) this.startExperience();
+    this.isAutoRotating = !this.isAutoRotating;
+    this.clearTimer('resumeRotation');
+    const control = this.viewer.getControl();
+    if (control) {
+      control.autoRotate = this.isAutoRotating;
+      control.autoRotateSpeed = AUTO_ROTATE_SPEED;
+    }
+    this.updateAutoRotateButton();
+    this.accumulatedYawRotation = 0;
+  }
+
+  toggleFullscreen() {
+    if (!this.isExperienceStarted) this.startExperience();
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => { });
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen();
+    }
+  }
+
+  updateFullscreenButton() {
+    const button = this.dom.btnFullscreen;
+    if (!button) return;
+    const fullscreen = !!document.fullscreenElement;
+    button.classList.toggle('active', fullscreen);
+    const icon = button.querySelector('i');
+    if (icon) icon.className = fullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line';
+  }
+
+  advanceAfterFullRotation() {
+    const category = this.categories[this.activeCategoryIndex];
+    let nextCategoryIndex = this.activeCategoryIndex;
+    let nextImageIndex = this.activeImageIndex + 1;
+    if (category && nextImageIndex >= category.images.length) {
+      nextCategoryIndex = (nextCategoryIndex + 1) % this.categories.length;
+      nextImageIndex = 0;
+    }
+    this.isAutoSwitching = true;
+    this.accumulatedYawRotation = 0;
+    this.switchPanorama(nextCategoryIndex, nextImageIndex);
+    this.clearTimer('autoSwitch');
+    this.timers.autoSwitch = setTimeout(() => {
+      this.isAutoSwitching = false;
+      this.accumulatedYawRotation = 0;
+      this.timers.autoSwitch = null;
+    }, 2000);
+  }
+
+  onViewerUpdate() {
+    const camera = this.viewer.getCamera();
+    if (!camera) return;
+    camera.getWorldDirection(this.cameraDirection);
+    const rawAngle = Math.atan2(this.cameraDirection.x, -this.cameraDirection.z) * (180 / Math.PI);
+    const angle = Math.round((rawAngle + 360) % 360);
+    this.updateCompassHUD(angle);
+    if (!this.isExperienceStarted) return;
+
+    if (this.prevYawAngle !== null && !this.isAutoSwitching) {
+      let delta = angle - this.prevYawAngle;
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
+      if (this.isAutoRotating) {
+        this.accumulatedYawRotation += Math.abs(delta);
+        if (this.accumulatedYawRotation >= 355) this.advanceAfterFullRotation();
+      }
+    }
+    this.prevYawAngle = angle;
+  }
+
+  onKeyDown(event) {
+    if (event.key === 'f' || event.key === 'F') this.dom.btnFullscreen?.click();
+    else if (event.key === 'r' || event.key === 'R') this.dom.btnReset?.click();
+    else if (event.key === ' ') {
+      event.preventDefault();
+      this.dom.btnAutoRotate?.click();
+    } else if (event.key === 'Escape') {
+      if (this.dom.modalHelp?.classList.contains('active')) {
+        this.dom.modalHelp.classList.remove('active');
+      } else {
+        this.dom.viewsDrawer?.classList.add('collapsed');
+      }
+    }
+  }
+
+  bindEvents() {
+    const bind = (name, handler) => this.dom[name]?.addEventListener('click', handler);
+    bind('btnStartTour', (event) => {
+      event.stopPropagation();
+      this.startExperience(0, 0);
+    });
+    bind('btnPrev', () => this.navigateScene(-1));
+    bind('btnNext', () => this.navigateScene(1));
+    bind('btnAutoRotate', () => this.toggleAutoRotate());
+    bind('btnFullscreen', () => this.toggleFullscreen());
+    bind('btnZoomIn', () => this.adjustZoom(-10));
+    bind('btnZoomOut', () => this.adjustZoom(10));
+    bind('btnReset', () => this.resetToActiveHeading());
+    bind('compassBadge', () => this.resetToActiveHeading());
+    bind('btnHelp', () => this.dom.modalHelp?.classList.add('active'));
+    bind('modalClose', () => this.dom.modalHelp?.classList.remove('active'));
+    bind('modalHelp', (event) => {
+      if (event.target === this.dom.modalHelp) this.dom.modalHelp.classList.remove('active');
+    });
+
+    this.dom.viewsDrawer?.addEventListener('mouseenter', () => {
+      this.isDrawerHovered = true;
+      this.clearTimer('closeDrawer');
+      this.dom.viewsDrawer.classList.remove('collapsed');
+    });
+    this.dom.viewsDrawer?.addEventListener('mouseleave', () => {
+      this.isDrawerHovered = false;
+      this.scheduleCloseDrawer();
+    });
+
+    window.addEventListener('resize', () => this.resizeViewer());
+    document.addEventListener('fullscreenchange', () => this.updateFullscreenButton());
+    document.addEventListener('keydown', (event) => this.onKeyDown(event));
+    this.viewer.addUpdateCallback(() => this.onViewerUpdate());
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  new PanoramaTourApp().init();
 });
